@@ -1,0 +1,1 @@
+**All models are ignored and not tracked by git because of their size. When you put models here you should know that git will not track them so you should have a copy.**
