@@ -1,0 +1,5 @@
+# Do not count any database releated file in git
+dataset/
+
+# Ignore all the model output files since they are too big to push
+*.h5
