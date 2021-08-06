@@ -2,6 +2,7 @@
 # If you don't register your model here segmentation models framework won't be able to find your model
 import functools
 from custom_model_template import model as modelFunc
+from doubleunet import double_unet
 from ..__init__ import inject_global_submodules
 # Add your custom backbones to here
 custom_backbone_list = {
@@ -24,4 +25,4 @@ custom_default_feature_layers = {
 
 class Custom_Registry:
     # Put here functions to your models
-    modelFunc = inject_global_submodules(modelFunc) # put your model function into inject_global_submodels
+    Double_Unet = inject_global_submodules(double_unet) # put your model function into inject_global_submodels
