@@ -4,6 +4,7 @@ from classification_models.models_factory import ModelsFactory
 
 from . import inception_resnet_v2 as irv2
 from . import inception_v3 as iv3
+from custom.custom_registry import custom_backbone_list, custom_default_feature_layers
 
 
 class BackbonesFactory(ModelsFactory):
@@ -91,9 +92,16 @@ class BackbonesFactory(ModelsFactory):
                       'nasnetlarge', 'nasnetmobile', 'xception']
 
     @property
+    def default_feature_layers(self):
+        all__default_feature_layers = copy.copy(self._default_feature_layers)
+        all__default_feature_layers.update(custom_default_feature_layers)
+        return all__default_feature_layers
+
+    @property
     def models(self):
         all_models = copy.copy(self._models)
         all_models.update(self._models_update)
+        all_models.update(custom_backbone_list)
         for k in self._models_delete:
             del all_models[k]
         return all_models
@@ -104,7 +112,7 @@ class BackbonesFactory(ModelsFactory):
         return model
 
     def get_feature_layers(self, name, n=5):
-        return self._default_feature_layers[name][:n]
+        return self.default_feature_layers[name][:n]
 
     def get_preprocessing(self, name):
         return self.get(name)[1]
