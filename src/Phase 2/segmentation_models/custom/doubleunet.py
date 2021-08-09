@@ -6,6 +6,9 @@ import tensorflow as tf
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications import *
+from ..models._common_blocks import Conv2dBn
+from ..models._utils import freeze_model
+from ..backbones.backbones_factory import Backbones
 
 backend = None
 layers = None
@@ -143,7 +146,7 @@ def encoder2(inputs):
 
 def decoder1(inputs, skip_connections):
     num_filters = [256, 128, 64, 32]
-    skip_connections.reverse()
+    skip_connections.reverse() # don't reverse they are already reversed
     x = inputs
 
     for i, f in enumerate(num_filters):
@@ -169,7 +172,7 @@ def encoder1(inputs):
     model = VGG19(include_top=False, weights='imagenet', input_tensor=inputs)
 
     output = model.get_layer("block5_conv4").output
-    return outpu
+    return output
 
 def build_double_unet(
             backbone,
@@ -179,17 +182,25 @@ def build_double_unet(
             n_upsample_blocks=5,
             classes=1,
             activation='sigmoid',
+            use_center_block = False,
             use_batchnorm=True):
     
     input_ = backbone.input
     x = backbone.output
 
     # extract skip connections
-    skips = ([backbone.get_layer(name=i).output if isinstance(i, str)
+    skip_1 = ([backbone.get_layer(name=i).output if isinstance(i, str)
               else backbone.get_layer(index=i).output for i in skip_connection_layers])
 
-    
-    #x, skip_1 = encoder1(input_)
+    if isinstance(backbone.layers[-1], layers.MaxPooling2D):
+        if(use_center_block):
+            x = Conv3x3BnReLU(512, use_batchnorm, name='center_block1')(x)
+            x = Conv3x3BnReLU(512, use_batchnorm, name='center_block2')(x)
+        else:
+            x = backbone.layer[-2].output
+            # for vgg models also skip last layer if not don't skip it
+            del skip_1[0]
+
     x = ASPP(x, 64)
     x = decoder1(x, skip_1)
     outputs1 = output_block(x)
@@ -217,5 +228,7 @@ def double_unet(backbone_name='vgg16',
                 decoder_filters=(256, 128, 64, 32, 16),
                 decoder_use_batchnorm=True,
                 **kwargs):
+    Backbones.get_backbone(backbone_name)
+    skip_layers = Backbones.get_feature_layers(backbone_name)
     model = build_double_unet((192, 256, 3))
     return model

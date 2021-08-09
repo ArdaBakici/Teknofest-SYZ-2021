@@ -115,7 +115,7 @@ from .models.linknet import Linknet as _Linknet
 from .models.fpn import FPN as _FPN
 from .custom.custom_registry import Custom_Registry
 
-custom = Custom_Registry()
+custom = Custom_Registry(_KERAS_BACKEND, _KERAS_LAYERS, _KERAS_MODELS, _KERAS_UTILS)
 Unet = inject_global_submodules(_Unet)
 PSPNet = inject_global_submodules(_PSPNet)
 Linknet = inject_global_submodules(_Linknet)
