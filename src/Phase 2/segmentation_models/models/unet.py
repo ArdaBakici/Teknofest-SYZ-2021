@@ -173,7 +173,7 @@ def Unet(
         decoder_use_batchnorm=True,
         **kwargs
 ):
-    """ Unet_ is a fully convolution neural network for image semantic segmentation
+    """ Unet is a fully convolution neural network for image semantic segmentation
 
     Args:
         backbone_name: name of classification model (without last dense layers) used as feature

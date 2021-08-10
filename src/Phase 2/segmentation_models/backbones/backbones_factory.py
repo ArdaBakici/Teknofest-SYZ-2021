@@ -4,7 +4,7 @@ from classification_models.models_factory import ModelsFactory
 
 from . import inception_resnet_v2 as irv2
 from . import inception_v3 as iv3
-from ..custom.custom_registry import custom_backbone_list, custom_default_feature_layers
+from ..custom.custom_backbone_registry import custom_backbone_list, custom_default_feature_layers
 
 
 class BackbonesFactory(ModelsFactory):

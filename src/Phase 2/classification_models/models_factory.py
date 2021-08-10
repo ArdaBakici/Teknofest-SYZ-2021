@@ -37,8 +37,8 @@ class ModelsFactory:
         'resnext101': [rx.ResNeXt101, rx.preprocess_input],
 
         # VGG
-        'vgg16': [ap.vgg16.VGG16, ap.vgg16.preprocess_input],
-        'vgg19': [ap.vgg19.VGG19, ap.vgg19.preprocess_input],
+        'vgg16': [ka.vgg16.VGG16, ka.vgg16.preprocess_input],
+        'vgg19': [ka.vgg19.VGG19, ka.vgg19.preprocess_input],
 
         # Densnet
         'densenet121': [ka.densenet.DenseNet121, ka.densenet.preprocess_input],
