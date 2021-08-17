@@ -3,3 +3,6 @@ dataset/
 __pycache__/
 # Ignore all the model output files since they are too big to push
 *.h5
+.vscode/
+data/
+outdata/
