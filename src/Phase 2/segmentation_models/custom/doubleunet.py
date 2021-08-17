@@ -48,10 +48,10 @@ def Conv3x3BnReLU(filters, use_batchnorm, name=None):
 
     return wrapper
 
-def output_block(class_num):
+def output_block(class_num, activation):
     def wrapper(input_tensor):
         x = Conv2D(class_num, (1, 1), padding="same")(input_tensor)
-        x = Activation('sigmoid')(x)
+        x = Activation(activation)(x)
         return x
     return wrapper
 
@@ -213,39 +213,61 @@ def ConvBlock_SE(filters, use_batchnorm, name, stage):
 # ---------------------------------------------------------------------
 #  Unet ASPP
 # ---------------------------------------------------------------------
-def ASPP(filters):
+def ASPP(filters, name):
     kwargs = get_submodules()
+    average_pooling_name = f"ASPP_{name}_average_pool"
+    conv_1_name = f"ASPP_{name}_conv_a"
+    bn_1_name = f"ASPP_{name}_bn_a"
+    activation_1_name = f"ASPP_{name}_activation_a"
+    upsample_name = f"ASPP_{name}_upsampling"
+    conv_2_name = f"ASPP_{name}_conv_b"
+    bn_2_name = f"ASPP_{name}_bn_b"
+    activation_2_name = f"ASPP_{name}_activation_b"
+    conv_3_name = f"ASPP_{name}_conv_c"
+    bn_3_name = f"ASPP_{name}_bn_c"
+    activation_3_name = f"ASPP_{name}_activation_c"
+    conv_4_name = f"ASPP_{name}_conv_d"
+    bn_4_name = f"ASPP_{name}_bn_d"
+    activation_4_name = f"ASPP_{name}_activation_d"
+    conv_5_name = f"ASPP_{name}_conv_e"
+    bn_5_name = f"ASPP_{name}_bn_e"
+    activation_5_name = f"ASPP_{name}_activation_e"
+    concat_name = f"ASPP_{name}_concat"
+    conv_last_name = f"ASPP_{name}_conv_last"
+    bn_last_name = f"ASPP_{name}_bn_last"
+    activation_last_name = f"ASPP_{name}_activation_last"
+    
 
     def wrapper(x):
         shape = x.shape
 
-        y1 = AveragePooling2D(pool_size=(shape[1], shape[2]))(x)
-        y1 = Conv2D(filters, 1, padding="same")(y1)
-        y1 = BatchNormalization()(y1)
-        y1 = Activation("relu")(y1)
-        y1 = UpSampling2D((shape[1], shape[2]), interpolation='bilinear')(y1)
+        y1 = AveragePooling2D(pool_size=(shape[1], shape[2]), name=average_pooling_name)(x)
+        y1 = Conv2D(filters, 1, padding="same", name=conv_1_name)(y1)
+        y1 = BatchNormalization(name=bn_1_name)(y1)
+        y1 = Activation("relu", name=activation_1_name)(y1)
+        y1 = UpSampling2D((shape[1], shape[2]), interpolation='bilinear', name=upsample_name)(y1)
 
-        y2 = Conv2D(filters, 1, dilation_rate=1, padding="same", use_bias=False)(x)
-        #y2 = BatchNormalization()(y2)
-        y2 = Activation("relu")(y2)
+        y2 = Conv2D(filters, 1, dilation_rate=1, padding="same", use_bias=False, name=conv_2_name)(x)
+        y2 = BatchNormalization(name=bn_2_name)(y2)
+        y2 = Activation("relu", name=activation_2_name)(y2)
 
-        y3 = Conv2D(filters, 3, dilation_rate=6, padding="same", use_bias=False)(x)
-        y3 = BatchNormalization()(y3)
-        y3 = Activation("relu")(y3)
+        y3 = Conv2D(filters, 3, dilation_rate=6, padding="same", use_bias=False, name=conv_3_name)(x)
+        y3 = BatchNormalization(name=bn_3_name)(y3)
+        y3 = Activation("relu", name=activation_3_name)(y3)
 
-        y4 = Conv2D(filters, 3, dilation_rate=12, padding="same", use_bias=False)(x)
-        y4 = BatchNormalization()(y4)
-        y4 = Activation("relu")(y4)
+        y4 = Conv2D(filters, 3, dilation_rate=12, padding="same", use_bias=False, name=conv_4_name)(x)
+        y4 = BatchNormalization(name=bn_4_name)(y4)
+        y4 = Activation("relu", name=activation_4_name)(y4)
 
-        y5 = Conv2D(filters, 3, dilation_rate=18, padding="same", use_bias=False)(x)
-        y5 = BatchNormalization()(y5)
-        y5 = Activation("relu")(y5)
+        y5 = Conv2D(filters, 3, dilation_rate=18, padding="same", use_bias=False, name=conv_5_name)(x)
+        y5 = BatchNormalization(name=bn_5_name)(y5)
+        y5 = Activation("relu", name=activation_5_name)(y5)
 
-        y = Concatenate()([y1, y2, y3, y4, y5])
+        y = Concatenate(name=concat_name)([y1, y2, y3, y4, y5])
 
-        y = Conv2D(filters, 1, dilation_rate=1, padding="same", use_bias=False)(y)
-        y = BatchNormalization()(y)
-        y = Activation("relu")(y)
+        y = Conv2D(filters, 1, dilation_rate=1, padding="same", use_bias=False, name=conv_last_name)(y)
+        y = BatchNormalization(name=bn_last_name)(y)
+        y = Activation("relu", name=activation_last_name)(y)
 
         return y
 
@@ -319,7 +341,7 @@ def build_double_unet(
             use_batchnorm):
     print("Settings initialized. Starting to build model.")
     input = backbone.input
-    x = backbone.output
+    x = backbone.output # size = input_shape / 2^5
     # Artitechture of double unet
     # backbone -> ASPP -> Decoder with skips from backbone -> Output Block -> Multiply with backbone -> Encoder 2 -> ASPP -> Decoder 2 with skips from both encoder 1 and 2-> Output Block -> Concatenate
     # extract skip connections for encoder 1
@@ -339,23 +361,25 @@ def build_double_unet(
             x = backbone.layers[-2].output
             # for vgg models also skip last layer if not don't skip it
             del skips_enc_1[0]
-    x = ASPP(aspp_filter_size)(x)
+    x = ASPP(aspp_filter_size, name="1")(x) # no size change
     print("ASPP-1 initialized...")
-    x = decoder1(decoder_block_1, decoder_filters, skips_enc_1, use_batchnorm)(x)
+    x = decoder1(decoder_block_1, decoder_filters, skips_enc_1, use_batchnorm)(x) # size = x * 2^block_amount
     print("Decoder-1 initialized...")
-    output1 = output_block(classes)(x)
+    output1 = output_block(classes, activation)(x) # no size change
     print("Output-1 initialized...")
-    x = input * output1
-    x, skips_enc_2 = encoder2(encoder_block, encoder_filters, use_batchnorm)(x)
+    x = input * output1 # no size change
+    print(f"output is {output1}")
+    print(f"x is {x}")
+    x, skips_enc_2 = encoder2(encoder_block, encoder_filters, use_batchnorm)(x) # size = x / 2^block_amount
     skips_enc_2.reverse()
     print("Encoder-2 initialized...")
-    x = ASPP(aspp_filter_size)(x)
+    x = ASPP(aspp_filter_size, name="2")(x) # no size change
     print("ASPP-2 initialized...")
-    x = decoder2(decoder_block_2, decoder_filters, skips_enc_1, skips_enc_2, use_batchnorm)(x)
+    x = decoder2(decoder_block_2, decoder_filters, skips_enc_1, skips_enc_2, use_batchnorm)(x) # size = x * 2^block_amount
     print("Decoder-2 initialized...")
-    output2 = output_block(classes)(x)
+    output2 = output_block(classes, activation)(x) # no size change
     print("Output-2 initialized...")
-    output = Concatenate()([output1, output2])
+    output = Concatenate()([output1, output2]) # no size change but channel change
     model = Model(input, output)
     print("Model initialization complete.")
     return model
@@ -363,18 +387,18 @@ def build_double_unet(
 def double_unet(backbone_name='vgg19',
                 input_shape=(None, None, 3),
                 classes=3,
-                activation='sigmoid',
+                activation='softmax',
                 weights=None,
                 encoder_weights='imagenet',
                 encoder_freeze=False,
                 encoder_features='default',
-                use_center_block=False,
+                use_center_block=True,
                 aspp_filter_size=64,
                 encoder_2_block_type='ConvBlock_SE',
                 decoder_1_block_type='upsampling',
                 decoder_2_block_type='upsampling',
-                encoder_filters=(32, 64, 128, 256),
-                decoder_filters=(256, 128, 64, 32),
+                encoder_filters=(16, 32, 64, 128, 256),
+                decoder_filters=(256, 128, 64, 32, 16),
                 use_batchnorm=True,
                 **kwargs):
 

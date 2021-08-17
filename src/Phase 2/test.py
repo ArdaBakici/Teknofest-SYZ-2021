@@ -10,4 +10,9 @@ from segmentation_models.custom import doubleunet
 
 #doubleunet.double_unet(encoder_weights=None)
 #doubleunet.double_unet()
-sm.custom.Double_Unet(backbone_name="vgg19", encoder_weights=None, input_shape=(512,512,3))
+#sm.custom.Double_Unet(backbone_name="seresnext101", encoder_weights=None, input_shape=(1024,1024,3))
+for i in sm.get_available_backbone_names():
+    print(f"----------Trying backend {i}----------")
+    model_double_unet = sm.custom.Double_Unet(backbone_name=i, encoder_weights=None, input_shape=(512,512,3))
+    print(f"----------No error in backend {i}----------")
+    del model_double_unet
