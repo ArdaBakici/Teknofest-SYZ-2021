@@ -6,7 +6,7 @@ from . import base
 _KERAS_FRAMEWORK_NAME = 'keras'
 _TF_KERAS_FRAMEWORK_NAME = 'tf.keras'
 
-_DEFAULT_KERAS_FRAMEWORK = _KERAS_FRAMEWORK_NAME
+_DEFAULT_KERAS_FRAMEWORK = _TF_KERAS_FRAMEWORK_NAME
 _KERAS_FRAMEWORK = None
 _KERAS_BACKEND = None
 _KERAS_LAYERS = None
@@ -82,7 +82,7 @@ def set_framework(name):
     _KERAS_MODELS = keras.models
     _KERAS_UTILS = keras.utils
     _KERAS_LOSSES = keras.losses
-
+    
     # allow losses/metrics get keras submodules
     base.KerasObject.set_submodules(
         backend=keras.backend,

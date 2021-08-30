@@ -51,7 +51,7 @@ def Conv3x3BnReLU(filters, use_batchnorm, name=None):
 def output_block(class_num, activation):
     def wrapper(input_tensor):
         x = Conv2D(class_num, (1, 1), padding="same")(input_tensor)
-        x = Activation(activation)(x)
+        x = Activation(activation, dtype='float32')(x)
         return x
     return wrapper
 
