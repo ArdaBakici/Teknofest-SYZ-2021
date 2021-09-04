@@ -1,7 +1,6 @@
 # Here is the imports
 import os
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard", "mixed_precision"]
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -9,9 +8,6 @@ import tensorflow as tf
 #tf.config.experimental.set_memory_growth(physical_devices[0], True)
 import segmentation_models as sm
 sm.set_framework("tf.keras")
-if "mixed_precision" in FLAGS:
-    print(f"PreTrain: Using Mixed Policy float16")
-    keras.mixed_precision.set_global_policy('mixed_float16')
 # keras.mixed_precision.set_global_policy('mixed_float16') normally this would provide extra speed for the model
 # but in the case of 1660ti gpus they seem like they have tensor cores even they don't thus it slows down the model use this on higher powered models
 from matplotlib import pyplot as plt
@@ -34,8 +30,9 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 64 # because dataset is too large huge shuffle sizes may cause problems with ram
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
-STEPS_PER_EPOCH = 5636//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
-VAL_STEPS_PER_EPOCH = 400//BATCH_SIZE # 995 same as steps per epoch
+STEPS_PER_EPOCH = 5636//BATCH_SIZE # IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
+VAL_STEPS_PER_EPOCH = 400//BATCH_SIZE # same as steps per epoch
+USE_TENSORBOARD = True
 # every shard is 200 files with 36 files on last shard
 # Model Constants
 BACKBONE = 'efficientnetb3'
@@ -57,12 +54,11 @@ random.shuffle(val_filenames)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint('./models/best_model.h5', save_weights_only=True, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint('./best_model.h5', save_weights_only=True, save_best_only=True, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
 ]
 
-if "tensorboard" in FLAGS:
-    print(f"PreTrain: Using tensorboard")
+if USE_TENSORBOARD:
     callbacks.append(
         TensorBoard(
             log_dir="logs",
@@ -184,7 +180,7 @@ history = model.fit(
         validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0), 
         validation_steps=VAL_STEPS_PER_EPOCH,
     )
-
+# TODO make this after eval for writing accuracy in the model name
 model_name = f'{history.history["val_iou_score"]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'
 save_path = os.path.join(MODEL_SAVE_PATH, f"{model_name}.h5")
 model.save(save_path)
