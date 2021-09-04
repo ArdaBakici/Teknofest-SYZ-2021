@@ -33,7 +33,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 64 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 6 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5636//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 400//BATCH_SIZE # 995 same as steps per epoch
 # every shard is 200 files with 36 files on last shard
@@ -57,7 +57,7 @@ random.shuffle(val_filenames)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint('./models/best_model.h5', save_weights_only=True, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, 'best_model.h5'), save_weights_only=True, save_best_only=True, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
 ]
 
