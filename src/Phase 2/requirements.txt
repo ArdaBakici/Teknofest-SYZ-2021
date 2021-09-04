@@ -107,8 +107,8 @@ tensorboard==2.6.0
 tensorboard-data-server==0.6.1
 tensorboard-plugin-profile==2.5.0
 tensorboard-plugin-wit==1.8.0
-tensorflow-estimator @ file:///build/python-tensorflow-estimator/src/estimator_pip/tensorflow_estimator-2.4.0-py2.py3-none-any.whl
-tensorflow-gpu @ file:///build/tensorflow/src/tmpoptcuda/tensorflow_gpu-2.6.0-cp39-cp39-linux_x86_64.whl
+tensorflow-estimator==2.4.0
+tensorflow-gpu==2.6.0
 termcolor==1.1.0
 tifffile==2021.8.8
 tornado==6.1
