@@ -17,6 +17,7 @@ if "mixed_precision" in FLAGS:
 from matplotlib import pyplot as plt
 AUTOTUNE = tf.data.AUTOTUNE
 import random
+import albumentations as A
 from datetime import datetime
 from tensorflow.keras.callbacks import TensorBoard
 # segmentation_models could also use `tf.keras` if you do not have Keras installed
@@ -57,7 +58,7 @@ random.shuffle(val_filenames)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    # keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, 'best_model.h5'), save_weights_only=True, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, 'best_model.h5'), save_weights_only=True, save_best_only=True, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
 ]
 
@@ -123,6 +124,24 @@ def plot_history(train_history):
     plt.legend(['Train', 'Test'], loc='upper left')
     plt.show()
 
+
+def aug_fn(image, mask, img_size):
+    transforms = A.Compose([
+            A.Rotate(limit=40),
+            A.RandomBrightness(limit=0.1),
+            A.JpegCompression(quality_lower=85, quality_upper=100, p=0.5),
+            A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
+            A.RandomContrast(limit=0.2, p=0.5),
+            A.HorizontalFlip(),])
+
+    aug_data = transforms(image=image, masks=mask)
+    aug_img, aug_mask = aug_data["image"], aug_data["masks"]
+    return aug_img, aug_mask
+
+def process_data(image, mask, img_size):
+    aug_img, aug_mask = tf.numpy_function(func=aug_fn, inp=[image, mask, img_size], Tout=(tf.float32, tf.float64))
+    return aug_img, aug_mask
+
 def parse_examples_batch(examples):
     feature_description = {
         'image/height' : tf.io.FixedLenFeature([], tf.int64),
@@ -136,7 +155,7 @@ def parse_examples_batch(examples):
 
 def prepare_sample(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["image/raw_image"])
-    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"]) # this was float64
     return image, label
 
 def get_dataset_optimized(filenames, batch_size, shuffle_size):
@@ -148,6 +167,7 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size):
     .batch(batch_size=batch_size)
     .map(map_func=parse_examples_batch, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     .map(map_func=prepare_sample, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    .map(map_func=process_data, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     #.cache()
     .prefetch(tf.data.experimental.AUTOTUNE))
 
@@ -164,14 +184,14 @@ optim = keras.optimizers.Adam(LR)
 # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
 # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
 # TODO redefine class weights
-dice_loss = sm.losses.DiceLoss(class_weights=np.array([1, 1, 0.5])) 
+dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.5, 0.5, 0.2])) 
 focal_loss = sm.losses.BinaryFocalLoss() if n_classes == 1 else sm.losses.CategoricalFocalLoss()
 total_loss = dice_loss + (1 * focal_loss)
 
 # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
 # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
 
-metrics = [sm.metrics.IOUScore(threshold=0.5), sm.metrics.FScore(threshold=0.5)]
+metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
 model.compile(optim, total_loss, metrics)
