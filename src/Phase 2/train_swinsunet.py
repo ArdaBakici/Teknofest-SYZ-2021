@@ -37,7 +37,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
@@ -62,8 +62,8 @@ random.shuffle(val_filenames)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, f'best_{datetime.now().strftime("%H_%M-%d_%m")}.h5'), save_weights_only=False, save_best_only=True, mode='min'),
-    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, f'_epoch_{{epoch:02d}}{datetime.now().strftime("%H_%M-%d_%m")}.h5'), save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'MODEL_SAVE_PATH/best_{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'MODEL_SAVE_PATH/_epoch_{{epoch:02d}}{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M-%d_%m")}.csv')
 ]
@@ -151,7 +151,7 @@ model = models.swin_unet_2d((512, 512, 3), filter_num_begin=64, n_labels=3, dept
 optim = keras.optimizers.Adam(LR)
 
 dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.45, 0.45, 0.1])) 
-#focal_tversky = losses.focal_tversky
+focal_tversky = losses.focal_tversky
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
 total_loss = dice_loss + (1 * focal_loss)
@@ -178,5 +178,5 @@ history = model.fit(
     )
 
 model_name = f'{history.history["val_iou_score"][-1]}iou_{datetime.now().strftime("%H_%M-%d_%m_%Y")}'
-save_path = os.path.join(MODEL_SAVE_PATH, f"{model_name}.h5")
+save_path = f"MODEL_SAVE_PATH/{model_name}.h5"
 model.save(save_path)
