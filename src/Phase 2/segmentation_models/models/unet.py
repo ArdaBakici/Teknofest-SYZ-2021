@@ -118,7 +118,6 @@ def build_unet(
 ):
     input_ = backbone.input
     x = backbone.output
-    print(f"Sanity Check: Backbone Output = {x}")
     # extract skip connections
     skips = ([backbone.get_layer(name=i).output if isinstance(i, str)
               else backbone.get_layer(index=i).output for i in skip_connection_layers])
@@ -127,7 +126,6 @@ def build_unet(
     if isinstance(backbone.layers[-1], layers.MaxPooling2D):
         x = Conv3x3BnReLU(512, use_batchnorm, name='center_block1')(x)
         x = Conv3x3BnReLU(512, use_batchnorm, name='center_block2')(x)
-    print(f"Sanity Check: VGG mod = {x}")
     # building decoder blocks
     for i in range(n_upsample_blocks):
 
@@ -137,7 +135,6 @@ def build_unet(
             skip = None
 
         x = decoder_block(decoder_filters[i], stage=i, use_batchnorm=use_batchnorm)(x, skip)
-    print(f"Sanity Check: Decoder Output = {x}")
     # model head (define number of output classes)
     x = layers.Conv2D(
         filters=classes,
@@ -148,7 +145,6 @@ def build_unet(
         name='final_conv',
     )(x)
     x = layers.Activation(activation, dtype='float32',name=activation)(x)
-    print(f"Sanity Check: Model Output = {x}")
     # create keras model instance
     model = models.Model(input_, x)
 

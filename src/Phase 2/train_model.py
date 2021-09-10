@@ -1,7 +1,9 @@
 # Here is the imports
 import os
+
+from tensorflow.python.keras.callbacks import EarlyStopping, ModelCheckpoint
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard"]
+FLAGS = ["tensorboard"] # tensorboard, mixed_precision
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -33,17 +35,18 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
-SHUFFLE_SIZE = 64 # because dataset is too large huge shuffle sizes may cause problems with ram
+SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
-STEPS_PER_EPOCH = 5636//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
-VAL_STEPS_PER_EPOCH = 400//BATCH_SIZE # 995 same as steps per epoch
+STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
+VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
+MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
 LR = 0.0001
-EPOCHS = 40
+EPOCHS = 100
 MODEL_SAVE_PATH = "./models"
 
 # Variables
@@ -58,8 +61,11 @@ random.shuffle(val_filenames)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, 'best_model.h5'), save_weights_only=True, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, f'best_{datetime.now().strftime("%H_%M_%d_%m")}.h5'), save_weights_only=True, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, f'10_epoch_{datetime.now().strftime("%H_%M_%d_%m")}.h5'), save_weights_only=True, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
+    keras.callbacks.EarlyStopping(patience=20),
+    keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M_%d_%m")}.csv')
 ]
 
 if "tensorboard" in FLAGS:
@@ -73,80 +79,37 @@ if "tensorboard" in FLAGS:
             update_freq="epoch",
         ))
 
-def visualize(**images):
-    """Plot images in one row."""
-    n = len(images)
-    plt.figure(figsize=(16, 5))
-    for i, (name, image) in enumerate(images.items()):
-        plt.subplot(1, n, i + 1)
-        plt.xticks([])
-        plt.yticks([])
-        plt.title(' '.join(name.split('_')).title())
-        # if whole binary image is true plt shows it as whole image is false so for bypassing this issue we assing one pixels value to 0
-        image[1,1] = 0 
-        plt.imshow(image)
-    plt.show()
-
-def visualize_dataset(img, mask, classes):
-    kwarg = {'image': img}
-    for i in range(len(classes)):
-        kwarg.update({classes[i] : mask[..., i].squeeze()})
-    visualize(**kwarg)
-
-    
-# helper function for data visualization    
-def denormalize(x):
-    """Scale image to range 0..1 for correct plot"""
-    x_max = np.percentile(x, 98)
-    x_min = np.percentile(x, 2)    
-    x = (x - x_min) / (x_max - x_min)
-    x = x.clip(0, 1)
-    return x
-
-def plot_history(train_history):
-    # Plot training & validation iou_score values
-    plt.figure(figsize=(30, 5))
-    plt.subplot(121)
-    plt.plot(train_history.history['iou_score'])
-    plt.plot(train_history.history['val_iou_score'])
-    plt.title('Model iou_score')
-    plt.ylabel('iou_score')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-
-    # Plot training & validation loss values
-    plt.subplot(122)
-    plt.plot(train_history.history['loss'])
-    plt.plot(train_history.history['val_loss'])
-    plt.title('Model loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.legend(['Train', 'Test'], loc='upper left')
-    plt.show()
-
-
-def aug_fn(image, mask, img_size):
+def aug_fn(image, mask):
     transforms = A.Compose([
             A.Rotate(limit=40),
-            A.RandomBrightness(limit=0.1),
-            A.JpegCompression(quality_lower=85, quality_upper=100, p=0.5),
-            A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
-            A.RandomContrast(limit=0.2, p=0.5),
-            A.HorizontalFlip(),])
-
-    aug_data = transforms(image=image, masks=mask)
-    aug_img, aug_mask = aug_data["image"], aug_data["masks"]
+            A.Flip(),
+            ])
+    aug_data = transforms(image=image, mask=mask)
+    aug_img, aug_mask = aug_data["image"], aug_data["mask"]
     return aug_img, aug_mask
 
-def process_data(image, mask, img_size):
-    aug_img, aug_mask = tf.numpy_function(func=aug_fn, inp=[image, mask, img_size], Tout=(tf.float32, tf.float64))
-    return aug_img, aug_mask
+def get_preprocessing(preprocessing_fn):
+    """Construct preprocessing transform
+    
+    Args:
+        preprocessing_fn (callbale): data normalization function 
+            (can be specific for each pretrained neural network)
+    Return:
+        transform: albumentations.Compose
+    
+    """
+    
+    _transform = [
+        A.Lambda(image=preprocessing_fn),
+    ]
+    return A.Compose(_transform)
+    
+def preprocessing_fn(image, mask):
+    aug = get_preprocessing(sm.get_preprocessing(BACKBONE))(image=image, mask=mask)
+    return aug["image"], aug["mask"]
 
 def parse_examples_batch(examples):
     feature_description = {
-        'image/height' : tf.io.FixedLenFeature([], tf.int64),
-        'image/width' : tf.io.FixedLenFeature([], tf.int64),
-        'image/depth' : tf.io.FixedLenFeature([], tf.int64),
         'image/raw_image' : tf.io.FixedLenFeature([], tf.string),
         'label/raw' : tf.io.FixedLenFeature([], tf.string)
     }
@@ -154,23 +117,31 @@ def parse_examples_batch(examples):
     return samples
 
 def prepare_sample(features):
-    image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["image/raw_image"])
-    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"]) # this was float64
+    image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
-def get_dataset_optimized(filenames, batch_size, shuffle_size):
+def prepare_sample_aug(features):
+    image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"]) # this was float64
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float32)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
+    return image, label
+
+def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
     record_dataset = tf.data.TFRecordDataset(filenames, compression_type=RECORD_ENCODING_TYPE, num_parallel_reads=AUTOTUNE)
     if shuffle_size > 0:
         record_dataset = record_dataset.shuffle(shuffle_size)
-    return (record_dataset
-    .repeat(EPOCHS)
-    .batch(batch_size=batch_size)
-    .map(map_func=parse_examples_batch, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    .map(map_func=prepare_sample, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    .map(map_func=process_data, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    #.cache()
-    .prefetch(tf.data.experimental.AUTOTUNE))
-
+    record_dataset = (record_dataset
+                    .repeat(EPOCHS)
+                    .batch(batch_size=batch_size)
+                    .map(map_func=parse_examples_batch, num_parallel_calls=tf.data.experimental.AUTOTUNE))
+    if augment:
+        record_dataset = record_dataset.map(map_func=prepare_sample_aug, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    else:
+        record_dataset = record_dataset.map(map_func=prepare_sample, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    return record_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
 n_classes = 1 if len(CLASSES) == 1 else (len(CLASSES) + 1)  # case for binary and multiclass segmentation
 activation = 'sigmoid' if n_classes == 1 else 'softmax'
@@ -184,7 +155,7 @@ optim = keras.optimizers.Adam(LR)
 # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
 # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
 # TODO redefine class weights
-dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.5, 0.5, 0.2])) 
+dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.45, 0.45, 0.1])) 
 focal_loss = sm.losses.BinaryFocalLoss() if n_classes == 1 else sm.losses.CategoricalFocalLoss()
 total_loss = dice_loss + (1 * focal_loss)
 
@@ -197,14 +168,14 @@ metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 model.compile(optim, total_loss, metrics)
 
 history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=True), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=EPOCHS, 
         callbacks=callbacks, 
-        validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0), 
+        validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, augment=False), 
         validation_steps=VAL_STEPS_PER_EPOCH,
     )
 
-model_name = f'{history.history["val_iou_score"]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'
+model_name = f'{history.history["val_iou_score"][-1]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'
 save_path = os.path.join(MODEL_SAVE_PATH, f"{model_name}.h5")
 model.save(save_path)
