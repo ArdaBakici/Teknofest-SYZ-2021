@@ -3,7 +3,7 @@ import os
 
 from tensorflow.python.keras.callbacks import EarlyStopping, ModelCheckpoint
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard"] # tensorboard, mixed_precision
+FLAGS = ["tensorboard", "mixed_precision"] # tensorboard, mixed_precision
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -37,7 +37,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
@@ -144,10 +144,10 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
         record_dataset = record_dataset.map(map_func=prepare_sample, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     return record_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
-model = models.transunet_2d((512, 512, 3), filter_num=[16, 32, 64], n_labels=3, stack_num_down=1, stack_num_up=1,
-                                embed_dim=96, num_mlp=384, num_heads=3, num_transformer=3,
-                                activation='ReLU', mlp_activation='GELU', output_activation='Softmax', 
-                                batch_norm=True, pool=True, unpool='bilinear', name='transunet')
+model = models.att_unet_2d((512, 512, 3), [64, 128, 256, 512], n_labels=3,
+                           stack_num_down=2, stack_num_up=2,
+                           activation='ReLU', atten_activation='ReLU', attention='add', output_activation='Softmax', 
+                           batch_norm=True, pool=False, unpool='bilinear', name='attunet', backbone='EfficientNetB3', weights='imagenet', freeze_backbone=True)
 
 optim = keras.optimizers.Adam(LR)
 
@@ -178,6 +178,6 @@ history = model.fit(
         validation_steps=VAL_STEPS_PER_EPOCH,
     )
 
-model_name = f'{history.history["val_iou_score"]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'
+model_name = f'{history.history["val_iou_score"][-1]}iou_{datetime.now().strftime("%H_%M-%d_%m_%Y")}'
 save_path = os.path.join(MODEL_SAVE_PATH, f"{model_name}.h5")
 model.save(save_path)

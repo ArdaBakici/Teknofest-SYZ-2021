@@ -37,9 +37,9 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
-STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
-VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
+BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
+STEPS_PER_EPOCH = 1#5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
+VAL_STEPS_PER_EPOCH = 1#1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
@@ -47,7 +47,7 @@ BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
 LR = 0.0001
-EPOCHS = 100
+EPOCHS = 20
 MODEL_SAVE_PATH = "./models"
 
 # Variables
@@ -62,8 +62,8 @@ random.shuffle(val_filenames)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint(f'MODEL_SAVE_PATH/best_{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_best_only=True, mode='min'),
-    keras.callbacks.ModelCheckpoint(f'MODEL_SAVE_PATH/_epoch_{{epoch:02d}}{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/best_{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/epoch_{{epoch:02d}}_{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M-%d_%m")}.csv')
 ]
@@ -156,9 +156,12 @@ focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
 total_loss = dice_loss + (1 * focal_loss)
 
-#def hybrid_loss(y_true, y_pred):
-#    loss_dice =
-#    loss_tversky
+def hybrid_loss(y_true, y_pred):
+    loss_dice = dice_loss(y_true, y_pred)
+    loss_tversky = focal_tversky(y_true, y_pred)
+    print(f"loss_dice is {loss_dice}")
+    print(f"loss_tverksy is {loss_tversky}")
+    return loss_dice + loss_tversky
 
 # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
 # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
@@ -166,7 +169,7 @@ total_loss = dice_loss + (1 * focal_loss)
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, total_loss, metrics)
+model.compile(optim, tota, metrics)
 
 history = model.fit(
         get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE), 
