@@ -54,16 +54,20 @@ MODEL_SAVE_PATH = "./models"
 train_dir = os.path.join(DATASET_PATH, TRAIN_DIR)
 val_dir = os.path.join(DATASET_PATH, VAL_DIR)
 
+date_name = datetime.now().strftime("%d_%m-%H_%M")
+
 train_filenames = tf.io.gfile.glob(f"{train_dir}/*.tfrecords")
 val_filenames = tf.io.gfile.glob(f"{val_dir}/*.tfrecords")
 
 random.shuffle(train_filenames) # shuffle tfrecord files order
 random.shuffle(val_filenames)
 
+os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
+
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, f'best_{datetime.now().strftime("%H_%M-%d_%m")}.h5'), save_weights_only=False, save_best_only=True, mode='min'),
-    keras.callbacks.ModelCheckpoint(os.path.join(MODEL_SAVE_PATH, f'_epoch_{{epoch:02d}}{datetime.now().strftime("%H_%M-%d_%m")}.h5'), save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M-%d_%m")}.csv')
 ]
@@ -147,7 +151,7 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
 model = models.att_unet_2d((512, 512, 3), [64, 128, 256, 512], n_labels=3,
                            stack_num_down=2, stack_num_up=2,
                            activation='ReLU', atten_activation='ReLU', attention='add', output_activation='Softmax', 
-                           batch_norm=True, pool=False, unpool='bilinear', name='attunet', backbone='EfficientNetB3', weights='imagenet', freeze_backbone=True)
+                           batch_norm=True, pool=False, unpool=False, name='attunet', backbone='EfficientNetB3', weights='imagenet', freeze_backbone=True)
 
 optim = keras.optimizers.Adam(LR)
 
