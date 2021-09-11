@@ -47,7 +47,7 @@ MODEL_WEIGHTS_PATH = None #'./models/epoch_40_07_32-11_09.h5' # if not none mode
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
-LR = 0.001
+LR = 0.0001
 EPOCHS = 100
 MODEL_SAVE_PATH = "./models"
 
@@ -177,10 +177,10 @@ def hybrid_loss(y_true, y_pred):
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, total_loss, metrics)
+model.compile(optim, focal_loss, metrics)
 
 if(MODEL_WEIGHTS_PATH is not None):
-    model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'dice_loss_plus_1focal_loss': total_loss, 'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})
+    model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})
     for layer in model.layers[:]:
         layer.trainable = True
 

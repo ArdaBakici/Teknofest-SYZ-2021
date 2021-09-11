@@ -202,7 +202,7 @@ def tversky(y_true, y_pred, alpha=0.5, const=K.epsilon()):
     
     return loss_val
 
-def focal_tversky(y_true, y_pred, alpha=0.5, gamma=4/3, const=K.epsilon()):
+def focal_tversky(y_true, y_pred, alpha=0.7, gamma=3/4, const=K.epsilon()):
     
     '''
     Focal Tversky Loss (FTL)
