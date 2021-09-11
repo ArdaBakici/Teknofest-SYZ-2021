@@ -412,7 +412,7 @@ def CONV_output(X, n_labels, kernel_size=1, activation='Softmax', name='conv_out
             
         else:
             activation_func = eval(activation)
-            X = activation_func(name='{}_activation'.format(name))(X)
+            X = activation_func(dtype='float32', name='{}_activation'.format(name))(X)
             
     return X
 

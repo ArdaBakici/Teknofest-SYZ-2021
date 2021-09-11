@@ -37,7 +37,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 4 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
@@ -46,7 +46,7 @@ MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with the
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
-LR = 0.0001
+LR = 0.001
 EPOCHS = 100
 MODEL_SAVE_PATH = "./models"
 
@@ -151,11 +151,11 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
 model = models.att_unet_2d((512, 512, 3), [64, 128, 256, 512], n_labels=3,
                            stack_num_down=2, stack_num_up=2,
                            activation='ReLU', atten_activation='ReLU', attention='add', output_activation='Softmax', 
-                           batch_norm=True, pool=False, unpool=False, name='attunet', backbone='EfficientNetB3', weights='imagenet', freeze_backbone=True)
+                           batch_norm=True, pool=False, unpool=False, name='attunet', backbone='EfficientNetB3', weights='imagenet', freeze_backbone=False)
 
 optim = keras.optimizers.Adam(LR)
 
-dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.45, 0.45, 0.1])) 
+dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.47, 0.47, 0.06])) 
 #focal_tversky = losses.focal_tversky
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
