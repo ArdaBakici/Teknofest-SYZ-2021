@@ -41,7 +41,7 @@ SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause p
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
-MODEL_WEIGHTS_PATH = './models/epoch_40_07_32-11_09.h5' # if not none model will be contiune training with these weights
+MODEL_WEIGHTS_PATH = None #'./models/epoch_40_07_32-11_09.h5' # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
 BACKBONE = 'efficientnetb3'
@@ -110,7 +110,8 @@ def get_preprocessing(preprocessing_fn):
     
 def preprocessing_fn(image, mask):
     aug = get_preprocessing(sm.get_preprocessing(BACKBONE))(image=image, mask=mask)
-    return aug["image"], aug["mask"]
+    image, mask = aug["image"].astype("float16"), aug["mask"].astype("float16")
+    return image, mask 
 
 def parse_examples_batch(examples):
     feature_description = {
@@ -130,7 +131,7 @@ def prepare_sample_aug(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
     label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"]) # this was float64
     image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float32)), [image, label])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float16, tf.float16)), [image, label])
     return image, label
 
 def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):

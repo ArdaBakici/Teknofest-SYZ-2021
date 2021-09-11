@@ -38,8 +38,8 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
 BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
-STEPS_PER_EPOCH = 1#5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
-VAL_STEPS_PER_EPOCH = 1#1274//BATCH_SIZE # 995 same as steps per epoch
+STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
+VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
@@ -54,16 +54,19 @@ MODEL_SAVE_PATH = "./models"
 train_dir = os.path.join(DATASET_PATH, TRAIN_DIR)
 val_dir = os.path.join(DATASET_PATH, VAL_DIR)
 
+date_name = datetime.now().strftime("%d_%m-%H_%M")
+
 train_filenames = tf.io.gfile.glob(f"{train_dir}/*.tfrecords")
 val_filenames = tf.io.gfile.glob(f"{val_dir}/*.tfrecords")
 
 random.shuffle(train_filenames) # shuffle tfrecord files order
 random.shuffle(val_filenames)
 
+os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
-    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/best_{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_best_only=True, mode='min'),
-    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/epoch_{{epoch:02d}}_{datetime.now().strftime("%H_%M-%d_%m")}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M-%d_%m")}.csv')
 ]
@@ -169,7 +172,7 @@ def hybrid_loss(y_true, y_pred):
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, tota, metrics)
+model.compile(optim, total_loss, metrics)
 
 history = model.fit(
         get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE), 
