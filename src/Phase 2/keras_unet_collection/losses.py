@@ -148,7 +148,7 @@ def dice(y_true, y_pred, const=K.epsilon()):
 # ========================= #
 # Tversky loss and variants
 
-def tversky_coef(y_true, y_pred, alpha=0.5, const=K.epsilon()):
+def tversky_coef(y_true, y_pred, alpha=0.5, const=1e-5):
     '''
     Weighted Sørensen–Dice coefficient.
     
@@ -202,7 +202,7 @@ def tversky(y_true, y_pred, alpha=0.5, const=K.epsilon()):
     
     return loss_val
 
-def focal_tversky(y_true, y_pred, alpha=0.7, gamma=3/4, const=K.epsilon()):
+def focal_tversky(y_true, y_pred, alpha=0.7, gamma=4/3, const=1e-5):
     
     '''
     Focal Tversky Loss (FTL)
@@ -230,7 +230,7 @@ def focal_tversky(y_true, y_pred, alpha=0.7, gamma=3/4, const=K.epsilon()):
     y_true = tf.squeeze(y_true)
     
     # (Tversky loss)**(1/gamma) 
-    loss_val = tf.math.pow((1-tversky_coef(y_true, y_pred, alpha=alpha, const=const)), 1/gamma)
+    loss_val = tf.math.pow((1-tversky_coef(y_true, y_pred, alpha=alpha, const=const)), gamma)
     
     return loss_val
 
