@@ -234,6 +234,23 @@ def focal_tversky(y_true, y_pred, alpha=0.7, gamma=4/3, const=1e-5):
     
     return loss_val
 
+def multiclass_focal_tversky(alpha=0.7, gamma=4/3, smooth=1):
+    """Updated version of focal tversky for multiclass
+        Returns: Loss Function
+    """
+    def wrapper(y_true, y_pred):
+        y_true = K.permute_dimensions(y_true, (3,1,2,0))
+        y_pred = K.permute_dimensions(y_pred, (3,1,2,0))
+
+        y_true_pos = K.batch_flatten(y_true)
+        y_pred_pos = K.batch_flatten(y_pred)
+        true_pos = K.sum(y_true_pos * y_pred_pos, 1)
+        false_neg = K.sum(y_true_pos * (1-y_pred_pos), 1)
+        false_pos = K.sum((1-y_true_pos)*y_pred_pos, 1)
+        pt_1 = (true_pos + smooth)/(true_pos + alpha*false_neg + (1-alpha)*false_pos + smooth)
+        return K.sum(K.pow((1-pt_1), gamma))
+    return wrapper
+
 # ========================= #
 # MS-SSIM
 

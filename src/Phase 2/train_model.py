@@ -161,14 +161,14 @@ optim = keras.optimizers.Adam(LR)
 # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
 # TODO redefine class weights
 dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.45, 0.45, 0.1])) 
-focal_tversky = losses.focal_tversky
+multi_focal_tversky = losses.multiclass_focal_tversky(alpha=0.7, gamma=4/3)
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
 total_loss = dice_loss + (1 * focal_loss)
 
 def hybrid_loss(y_true, y_pred):
     loss_dice = dice_loss(y_true, y_pred)
-    loss_tversky = focal_tversky(y_true, y_pred)
+    loss_tversky = multi_focal_tversky(y_true, y_pred)
     return loss_dice + loss_tversky
 
 # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
@@ -177,7 +177,7 @@ def hybrid_loss(y_true, y_pred):
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, focal_loss, metrics)
+model.compile(optim, multi_focal_tversky, metrics)
 
 if(MODEL_WEIGHTS_PATH is not None):
     model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})
