@@ -68,6 +68,7 @@ os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 callbacks = [
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{date_name}.csv')
 ]
@@ -110,7 +111,7 @@ def get_preprocessing(preprocessing_fn):
     
 def preprocessing_fn(image, mask):
     aug = get_preprocessing(sm.get_preprocessing(BACKBONE))(image=image, mask=mask)
-    image, mask = aug["image"].astype("float16"), aug["mask"].astype("float16")
+    image, mask = aug["image"].astype("float32"), aug["mask"].astype("float32")
     return image, mask 
 
 def parse_examples_batch(examples):
@@ -124,14 +125,14 @@ def parse_examples_batch(examples):
 def prepare_sample(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
     label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float16, tf.float16)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
 def prepare_sample_aug(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
     label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"]) # this was float64
     image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float32)), [image, label])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float16, tf.float16)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
 def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
@@ -180,7 +181,7 @@ metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 model.compile(optim, multi_focal_tversky, metrics)
 
 if(MODEL_WEIGHTS_PATH is not None):
-    model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})
+    model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'wrapper': multi_focal_tversky,'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})
     for layer in model.layers[:]:
         layer.trainable = True
 
@@ -191,6 +192,7 @@ history = model.fit(
         callbacks=callbacks, 
         validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, augment=False), 
         validation_steps=VAL_STEPS_PER_EPOCH,
+        initial_epoch=20
     )
 
 model_name = f'{history.history["val_iou_score"][-1]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'

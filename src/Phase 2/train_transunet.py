@@ -3,7 +3,7 @@ import os
 
 from tensorflow.python.keras.callbacks import EarlyStopping, ModelCheckpoint
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard", "mixed_precision"] # tensorboard, mixed_precision
+FLAGS = ["tensorboard"] # tensorboard, mixed_precision
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -37,7 +37,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 4 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
@@ -46,7 +46,7 @@ MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with the
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
-LR = 0.001
+LR = 0.0001
 EPOCHS = 100
 MODEL_SAVE_PATH = "./models"
 
@@ -68,8 +68,9 @@ os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 callbacks = [
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
-    keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M-%d_%m")}.csv')
+    keras.callbacks.CSVLogger(f'./customlogs/{date_name}.csv')
 ]
 
 if "tensorboard" in FLAGS:
@@ -156,6 +157,7 @@ model = models.att_unet_2d((512, 512, 3), [64, 128, 256, 512], n_labels=3,
 optim = keras.optimizers.Adam(LR)
 
 dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.47, 0.47, 0.06])) 
+multi_focal_tversky = losses.multiclass_focal_tversky(alpha=0.7, gamma=4/3)
 #focal_tversky = losses.focal_tversky
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
@@ -171,7 +173,7 @@ total_loss = dice_loss + (1 * focal_loss)
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, total_loss, metrics)
+model.compile(optim, multi_focal_tversky, metrics)
 
 history = model.fit(
         get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE), 

@@ -37,7 +37,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with these weights
@@ -47,7 +47,7 @@ BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
 LR = 0.0001
-EPOCHS = 20
+EPOCHS = 50
 MODEL_SAVE_PATH = "./models"
 
 # Variables
@@ -67,8 +67,9 @@ os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 callbacks = [
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
+    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
-    keras.callbacks.CSVLogger(f'./customlogs/{datetime.now().strftime("%H_%M-%d_%m")}.csv')
+    keras.callbacks.CSVLogger(f'./customlogs/{date_name}.csv')
 ]
 
 if "tensorboard" in FLAGS:
@@ -147,24 +148,17 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
         record_dataset = record_dataset.map(map_func=prepare_sample, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     return record_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
-model = models.swin_unet_2d((512, 512, 3), filter_num_begin=64, n_labels=3, depth=3, stack_num_down=2, stack_num_up=2, 
-                            patch_size=(2, 2), num_heads=[4, 8, 8], window_size=[4, 2, 2, 2], num_mlp=512, 
+model = models.swin_unet_2d((512, 512, 3), filter_num_begin=64, n_labels=3, depth=2, stack_num_down=2, stack_num_up=2, 
+                            patch_size=(2, 2), num_heads=[4, 8], window_size=[4, 2, 2, 2], num_mlp=512, 
                             output_activation='Softmax', shift_window=True, name='swin_unet')
 
 optim = keras.optimizers.Adam(LR)
 
 dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.45, 0.45, 0.1])) 
-focal_tversky = losses.focal_tversky
+focal_tversky = losses.multiclass_focal_tversky()
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
 total_loss = dice_loss + (1 * focal_loss)
-
-def hybrid_loss(y_true, y_pred):
-    loss_dice = dice_loss(y_true, y_pred)
-    loss_tversky = focal_tversky(y_true, y_pred)
-    print(f"loss_dice is {loss_dice}")
-    print(f"loss_tverksy is {loss_tversky}")
-    return loss_dice + loss_tversky
 
 # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
 # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
@@ -172,7 +166,7 @@ def hybrid_loss(y_true, y_pred):
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, total_loss, metrics)
+model.compile(optim, focal_tversky, metrics)
 
 history = model.fit(
         get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE), 

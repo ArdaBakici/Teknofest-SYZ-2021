@@ -234,7 +234,7 @@ def focal_tversky(y_true, y_pred, alpha=0.7, gamma=4/3, const=1e-5):
     
     return loss_val
 
-def multiclass_focal_tversky(alpha=0.7, gamma=4/3, smooth=1):
+def multiclass_focal_tversky(alpha=0.7, gamma=4/3, smooth=K.epsilon()):
     """Updated version of focal tversky for multiclass
         Returns: Loss Function
     """
