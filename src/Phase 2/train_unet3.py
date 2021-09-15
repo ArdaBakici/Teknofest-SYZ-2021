@@ -155,7 +155,7 @@ n_classes = 1 if len(CLASSES) == 1 else (len(CLASSES) + 1)  # case for binary an
 activation = 'sigmoid' if n_classes == 1 else 'softmax'
 
 #create model
-model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[64, 128, 256, 512],  
+model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],  
                              stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
                              batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', name='unet3plus')
 
@@ -195,7 +195,7 @@ history = model.fit(
         callbacks=callbacks, 
         validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, augment=False), 
         validation_steps=VAL_STEPS_PER_EPOCH,
-        initial_epoch=0
+        verbose=2
     )
 
 model_name = f'{history.history["val_iou_score"][-1]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'
