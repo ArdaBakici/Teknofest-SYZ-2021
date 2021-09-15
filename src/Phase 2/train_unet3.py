@@ -40,8 +40,8 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
-STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
-VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
+STEPS_PER_EPOCH = 4977//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
+VAL_STEPS_PER_EPOCH = 1659//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None #'./models/epoch_40_07_32-11_09.h5' # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
@@ -52,7 +52,9 @@ LR = 0.0001
 EPOCHS = 100
 MODEL_SAVE_PATH = "./models"
 
-date_name = datetime.now().strftime("%d_%m-%H_%M")
+specifier_name = 'unet3'
+date_name = f'{datetime.now().strftime("%d_%m-%H_%M")}-{specifier_name}'
+
 # Variables
 train_dir = os.path.join(DATASET_PATH, TRAIN_DIR)
 val_dir = os.path.join(DATASET_PATH, VAL_DIR)
@@ -88,7 +90,6 @@ if "tensorboard" in FLAGS:
 def aug_fn(image, mask):
     transforms = A.Compose([
             A.Rotate(limit=40),
-            A.Flip(),
             ])
     aug_data = transforms(image=image, mask=mask)
     aug_img, aug_mask = aug_data["image"], aug_data["mask"]
@@ -156,7 +157,7 @@ activation = 'sigmoid' if n_classes == 1 else 'softmax'
 #create model
 model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],  
                              stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
-                             batch_norm=True, pool='max', unpool=False, deep_supervision=True, name='unet3plus')
+                             batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', name='unet3plus')
 
 # define optomizer
 optim = keras.optimizers.Adam(LR)
@@ -188,7 +189,7 @@ if(MODEL_WEIGHTS_PATH is not None):
         layer.trainable = True
 
 history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=False), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=True), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=EPOCHS, 
         callbacks=callbacks, 
