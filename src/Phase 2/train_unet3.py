@@ -126,15 +126,15 @@ def parse_examples_batch(examples):
 
 def prepare_sample(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
-    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float64)), [image, label])
     return image, label
 
 def prepare_sample_aug(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
-    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"]) # this was float64
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float32)), [image, label])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"]) # this was float64
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float64)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float64)), [image, label])
     return image, label
 
 def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
@@ -155,7 +155,7 @@ n_classes = 1 if len(CLASSES) == 1 else (len(CLASSES) + 1)  # case for binary an
 activation = 'sigmoid' if n_classes == 1 else 'softmax'
 
 #create model
-model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],  
+model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[64, 128, 256, 512],  
                              stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
                              batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', name='unet3plus')
 
@@ -189,7 +189,7 @@ if(MODEL_WEIGHTS_PATH is not None):
         layer.trainable = True
 
 history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=True), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=False), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=EPOCHS, 
         callbacks=callbacks, 
