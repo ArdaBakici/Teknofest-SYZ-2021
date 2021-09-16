@@ -46,7 +46,7 @@ MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with the
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
-LR = 0.0001
+LR = 0.00005
 EPOCHS = 50
 MODEL_SAVE_PATH = "./models"
 
@@ -148,17 +148,17 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
         record_dataset = record_dataset.map(map_func=prepare_sample, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     return record_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
-model = models.swin_unet_2d((512, 512, 3), filter_num_begin=64, n_labels=3, depth=2, stack_num_down=2, stack_num_up=2, 
-                            patch_size=(2, 2), num_heads=[4, 8], window_size=[4, 2, 2, 2], num_mlp=512, 
+model = models.swin_unet_2d((512, 512, 3), filter_num_begin=32, n_labels=3, depth=2, stack_num_down=2, stack_num_up=2, 
+                            patch_size=(2, 2), num_heads=[4, 8], window_size=[4, 2, 2, 2], num_mlp=256, 
                             output_activation='Softmax', shift_window=True, name='swin_unet')
 
 optim = keras.optimizers.Adam(LR)
 
-dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.45, 0.45, 0.1])) 
+dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.47, 0.47, 0.06])) 
 focal_tversky = losses.multiclass_focal_tversky()
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
-total_loss = dice_loss + (1 * focal_loss)
+total_loss = dice_loss
 
 # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
 # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
@@ -166,14 +166,14 @@ total_loss = dice_loss + (1 * focal_loss)
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, focal_tversky, metrics)
+model.compile(optim, total_loss, metrics)
 
 history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=False), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=EPOCHS, 
         callbacks=callbacks, 
-        validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0), 
+        validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, augment=False), 
         validation_steps=VAL_STEPS_PER_EPOCH,
     )
 
