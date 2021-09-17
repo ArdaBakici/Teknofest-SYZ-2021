@@ -26,6 +26,7 @@ from keras_unet_collection import losses
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.models import load_model
 import hetorex
+from tensorflow.keras import backend as K
 from hetorex import loss_functions
 # segmentation_models could also use `tf.keras` if you do not have Keras installed
 # or you could switch to other framework using `sm.set_framework('tf.keras')`
@@ -42,8 +43,8 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
-STEPS_PER_EPOCH = 5949//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
-VAL_STEPS_PER_EPOCH = 1274//BATCH_SIZE # 995 same as steps per epoch
+STEPS_PER_EPOCH = 4977//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
+VAL_STEPS_PER_EPOCH = 1659//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None#'./models/14_09-22_55/best.h5' # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
@@ -54,7 +55,9 @@ LR = 0.0001
 EPOCHS = 100
 MODEL_SAVE_PATH = "./models"
 
-date_name = datetime.now().strftime("%d_%m-%H_%M")
+specifier_name = 'tverky_dice_unet'
+date_name = f'{datetime.now().strftime("%d_%m-%H_%M")}-{specifier_name}'
+
 # Variables
 train_dir = os.path.join(DATASET_PATH, TRAIN_DIR)
 val_dir = os.path.join(DATASET_PATH, VAL_DIR)
@@ -65,7 +68,7 @@ val_filenames = tf.io.gfile.glob(f"{val_dir}/*.tfrecords")
 random.shuffle(train_filenames) # shuffle tfrecord files order
 random.shuffle(val_filenames)
 
-#os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
+os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 
 # define callbacks for learning rate scheduling and best checkpoints saving
 callbacks = [
@@ -170,6 +173,12 @@ focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
 total_loss = dice_loss + (1 * focal_loss)
 combo_loss = sm.losses.CategoricalFocalLoss()
+
+def keras_lovasz_softmax(y_true, y_pred):
+    y_true = K.expand_dims(K.argmax(y_true, axis=-1), -1)
+    y_true = tf.cast(y_true, y_pred.dtype)
+    return loss_functions.lovasz_softmax(y_pred, y_true)
+
 #def hybrid_loss(y_true, y_pred):
 #    loss_dice = dice_loss(y_true, y_pred)
 #    loss_tversky = multi_focal_tversky(y_true, y_pred)
@@ -181,7 +190,7 @@ combo_loss = sm.losses.CategoricalFocalLoss()
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optimizer= optim, loss=[dice_loss, multi_focal_tversky], metrics=metrics)
+model.compile(optimizer= optim, loss=[multi_focal_tversky, dice_loss], metrics=metrics)
 
 if(MODEL_WEIGHTS_PATH is not None):
     model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'dice_loss_plus_1focal_loss': total_loss,'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})

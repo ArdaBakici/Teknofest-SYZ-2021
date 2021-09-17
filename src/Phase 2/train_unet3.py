@@ -39,7 +39,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 4977//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1659//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None #'./models/epoch_40_07_32-11_09.h5' # if not none model will be contiune training with these weights
@@ -71,7 +71,7 @@ os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 callbacks = [
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
-    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
+    #keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{date_name}.csv')
 ]
@@ -114,6 +114,7 @@ def get_preprocessing(preprocessing_fn):
 def preprocessing_fn(image, mask):
     image = image/255.
     image = image.astype("float32")
+    mask = mask.astype("float32")
     return image, mask
 
 def parse_examples_batch(examples):
@@ -127,14 +128,14 @@ def parse_examples_batch(examples):
 def prepare_sample(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
     label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float64)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
 def prepare_sample_aug(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
     label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"]) # this was float64
     image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float64)), [image, label])
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float64)), [image, label])
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
 def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
@@ -155,9 +156,9 @@ n_classes = 1 if len(CLASSES) == 1 else (len(CLASSES) + 1)  # case for binary an
 activation = 'sigmoid' if n_classes == 1 else 'softmax'
 
 #create model
-model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],  
+model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],
                              stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
-                             batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', name='unet3plus')
+                             batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', freeze_backbone=False, freeze_batch_norm=False, name='unet3plus')
 
 # define optomizer
 optim = keras.optimizers.Adam(LR)
@@ -181,7 +182,9 @@ total_loss = dice_loss + (1 * focal_loss)
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
-model.compile(optim, total_loss, metrics)
+model.compile(optimizer= optim, loss= [total_loss, total_loss, total_loss, total_loss],  metrics= metrics)
+
+print(f"Sanity Check : Model Outputs {model.output}")
 
 if(MODEL_WEIGHTS_PATH is not None):
     model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'combo_loss': total_loss,'iou_score': sm.metrics.IOUScore(), 'f1-score': sm.metrics.FScore()})
@@ -195,7 +198,6 @@ history = model.fit(
         callbacks=callbacks, 
         validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, augment=False), 
         validation_steps=VAL_STEPS_PER_EPOCH,
-        verbose=2
     )
 
 model_name = f'{history.history["val_iou_score"][-1]}iou_{datetime.now().strftime("%H_%M_%d_%m_%Y")}'
