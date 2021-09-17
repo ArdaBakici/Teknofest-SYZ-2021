@@ -3,7 +3,7 @@ import os
 
 from tensorflow.python.keras.callbacks import EarlyStopping, ModelCheckpoint
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard"] # tensorboard, mixed_precision
+FLAGS = ["tensorboard", "multi_gpu"] # tensorboard, mixed_precision, multi_gpu
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -156,40 +156,70 @@ def get_dataset_optimized(filenames, batch_size, shuffle_size, augment=True):
 n_classes = 1 if len(CLASSES) == 1 else (len(CLASSES) + 1)  # case for binary and multiclass segmentation
 activation = 'sigmoid' if n_classes == 1 else 'softmax'
 
-#create model
-model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],
-                             stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
-                             batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', freeze_backbone=False, freeze_batch_norm=False, name='unet3plus')
+if "multi_gpu" in FLAGS:
+    strategy = tf.distribute.MirroredStrategy()
+    print("Number of devices: {}".format(strategy.num_replicas_in_sync))
 
-# define optomizer
-optim = keras.optimizers.Adam(LR)
+    # Open a strategy scope.
+    with strategy.scope():
+        model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],
+                                stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
+                                batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', freeze_backbone=False, freeze_batch_norm=False, name='unet3plus')
 
-# Segmentation models losses can be combined together by '+' and scaled by integer or float factor
-# set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
-# TODO redefine class weights
-dice_loss = sm.losses.DiceLoss(class_weights=np.array([2, 2, 0.5])) 
-#multi_focal_tversky = losses.multiclass_focal_tversky(alpha=0.7, gamma=4/3)
-focal_loss = sm.losses.CategoricalFocalLoss()
-#total_loss = dice_loss + (1 * focal_tversky)
-total_loss = dice_loss + (1 * focal_loss)
-#def hybrid_loss(y_true, y_pred):
-#    loss_dice = dice_loss(y_true, y_pred)
-#    loss_tversky = multi_focal_tversky(y_true, y_pred)
-#    return loss_dice + loss_tversky
+        # define optomizer
+        optim = keras.optimizers.Adam(LR)
 
-# actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
-# total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
+        # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
+        # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
+        # TODO redefine class weights
+        dice_loss = sm.losses.DiceLoss(class_weights=np.array([2, 2, 0.5])) 
+        #multi_focal_tversky = losses.multiclass_focal_tversky(alpha=0.7, gamma=4/3)
+        focal_loss = sm.losses.CategoricalFocalLoss()
+        #total_loss = dice_loss + (1 * focal_tversky)
+        total_loss = dice_loss + (1 * focal_loss)
+        #def hybrid_loss(y_true, y_pred):
+        #    loss_dice = dice_loss(y_true, y_pred)
+        #    loss_tversky = multi_focal_tversky(y_true, y_pred)
+        #    return loss_dice + loss_tversky
 
-metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
+        # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
+        # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
 
-# compile keras model with defined optimozer, loss and metrics
+        metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
-model.compile(optimizer= optim, loss= [total_loss, total_loss, total_loss, total_loss],  metrics= metrics)
+        # compile keras model with defined optimozer, loss and metrics
 
-try:
-    model = multi_gpu_utils.multi_gpu_model(model, gpu=2)
-except:
-    pass
+        model.compile(optimizer= optim, loss= [total_loss, total_loss, total_loss, total_loss],  metrics= metrics)
+else:
+    #create model
+    model = models.unet_3plus_2d((512, 512, 3), n_labels=3, filter_num_down=[32, 64, 128, 256],
+                                stack_num_down=2, stack_num_up=1, activation='ReLU', output_activation='Softmax',
+                                batch_norm=True, pool='max', unpool=False, deep_supervision=True, backbone='EfficientNetB3', freeze_backbone=False, freeze_batch_norm=False, name='unet3plus')
+
+    # define optomizer
+    optim = keras.optimizers.Adam(LR)
+
+    # Segmentation models losses can be combined together by '+' and scaled by integer or float factor
+    # set class weights for dice_loss (car: 1.; pedestrian: 2.; background: 0.5;)
+    # TODO redefine class weights
+    dice_loss = sm.losses.DiceLoss(class_weights=np.array([2, 2, 0.5])) 
+    #multi_focal_tversky = losses.multiclass_focal_tversky(alpha=0.7, gamma=4/3)
+    focal_loss = sm.losses.CategoricalFocalLoss()
+    #total_loss = dice_loss + (1 * focal_tversky)
+    total_loss = dice_loss + (1 * focal_loss)
+    #def hybrid_loss(y_true, y_pred):
+    #    loss_dice = dice_loss(y_true, y_pred)
+    #    loss_tversky = multi_focal_tversky(y_true, y_pred)
+    #    return loss_dice + loss_tversky
+
+    # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
+    # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
+
+    metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
+
+    # compile keras model with defined optimozer, loss and metrics
+
+    model.compile(optimizer= optim, loss= [total_loss, total_loss, total_loss, total_loss],  metrics= metrics)
 
 print(f"Sanity Check : Model Outputs {model.output}")
 
