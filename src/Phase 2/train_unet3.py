@@ -3,7 +3,7 @@ import os
 
 from tensorflow.python.keras.callbacks import EarlyStopping, ModelCheckpoint
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard", "multi_gpu"] # tensorboard, mixed_precision, multi_gpu
+FLAGS = ["tensorboard", "mixed_precision"] # tensorboard, mixed_precision, multi_gpu
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -40,7 +40,7 @@ RECORD_ENCODING_TYPE = "ZLIB" # none if no encoding is used
 # Pipeline parameters
 BUFFER_SIZE = None # set buffer size to default value, change if you have bottleneck
 SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause problems with ram
-BATCH_SIZE = 1 # Highly dependent on d-gpu and system ram
+BATCH_SIZE = 4 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 4977//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 1659//BATCH_SIZE # 995 same as steps per epoch
 MODEL_WEIGHTS_PATH = None #'./models/epoch_40_07_32-11_09.h5' # if not none model will be contiune training with these weights

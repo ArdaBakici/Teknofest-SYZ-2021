@@ -333,10 +333,10 @@ def unet_3plus_2d(input_size, n_labels, filter_num_down, filter_num_skip='auto',
                 print('\t{}_output_sup{}_activation'.format(name, i-1))
                 
                 if output_activation == 'Sigmoid':
-                    X = Activation('sigmoid', name='{}_output_sup{}_activation'.format(name, i-1))(X)
+                    X = Activation('sigmoid', dtype='float32', name='{}_output_sup{}_activation'.format(name, i-1))(X)
                 else:
                     activation_func = eval(output_activation)
-                    X = activation_func(name='{}_output_sup{}_activation'.format(name, i-1))(X)
+                    X = activation_func(name='{}_output_sup{}_activation'.format(name, i-1), dtype='float32')(X)
             else:
                 if unpool is False:
                     print('\t{}_output_sup{}_trans_conv'.format(name, i-1))
