@@ -157,7 +157,7 @@ n_classes = 1 if len(CLASSES) == 1 else (len(CLASSES) + 1)  # case for binary an
 activation = 'sigmoid' if n_classes == 1 else 'softmax'
 
 if "multi_gpu" in FLAGS:
-    strategy = tf.distribute.MirroredStrategy()
+    strategy = tf.distribute.MirroredStrategy(cross_device_ops=tf.distribute.HierarchicalCopyAllReduce())
     print("Number of devices: {}".format(strategy.num_replicas_in_sync))
 
     # Open a strategy scope.
