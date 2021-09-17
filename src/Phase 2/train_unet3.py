@@ -25,6 +25,7 @@ from keras_unet_collection import losses, models
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.models import load_model
 from hetorex import loss_functions
+from keras.utils import multi_gpu_utils
 # segmentation_models could also use `tf.keras` if you do not have Keras installed
 # or you could switch to other framework using `sm.set_framework('tf.keras')`
 
@@ -182,7 +183,13 @@ total_loss = dice_loss + (1 * focal_loss)
 metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 
 # compile keras model with defined optimozer, loss and metrics
+
 model.compile(optimizer= optim, loss= [total_loss, total_loss, total_loss, total_loss],  metrics= metrics)
+
+try:
+    model = multi_gpu_utils.multi_gpu_model(model, gpu=2)
+except:
+    pass
 
 print(f"Sanity Check : Model Outputs {model.output}")
 
