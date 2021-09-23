@@ -26,6 +26,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras import layers
 from tensorflow.keras import backend as K
 from hetorex import loss_functions
+from tensorflow.keras.utils import plot_model
 # segmentation_models could also use `tf.keras` if you do not have Keras installed
 # or you could switch to other framework using `sm.set_framework('tf.keras')`
 
@@ -42,18 +43,18 @@ SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause p
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 6486//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 150//BATCH_SIZE # 995 same as steps per epoch
-MODEL_WEIGHTS_PATH = './models/20_09-00_30-focal_lovasz_final/best_17.h5' #'./models/14_09-22_55/best.h5' # if not none model will be contiune training with these weights
+MODEL_WEIGHTS_PATH = None#'./models/20_09-00_30-focal_lovasz_final/best_17.h5' #'./models/14_09-22_55/best.h5' # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
 LR = 0.0001
-EPOCHS = 100
-FINE_TUNE_EPOCH = EPOCHS + 100
+EPOCHS = 20
+FINE_TUNE_EPOCH = EPOCHS + 80
 MODEL_SAVE_PATH = "./models"
 
-specifier_name = 'focal_lovasz_final'
+specifier_name = 'focal_lovasz_pretrain_final'
 date_name = f'{datetime.now().strftime("%d_%m-%H_%M")}-{specifier_name}'
 
 # Variables
@@ -196,24 +197,29 @@ if(MODEL_WEIGHTS_PATH is not None):
         layer.trainable = True
 
 history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, EPOCHS, augment=True), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, EPOCHS, augment=False), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=EPOCHS, 
         callbacks=callbacks, 
         validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, EPOCHS, augment=False), 
-        validation_steps=VAL_STEPS_PER_EPOCH,
-        initial_epoch=17
+        validation_steps=VAL_STEPS_PER_EPOCH
     )
 
 if "fine_tune" in FLAGS:
+    set_trainable = False
     for layer in model.layers:
-        if not isinstance(layer, layers.BatchNormalization):
-            layer.trainable = True
+        if layer.name == 'block6a_project_conv':
+            set_trainable = True
+        if set_trainable:
+            if not isinstance(layer, layers.BatchNormalization):
+                layer.trainable = True
+        else:
+            layer.trainable = False
 
     model.compile(optimizer= optim, loss=[keras_lovasz_softmax, focal_loss], metrics=metrics, loss_weights=[0.9, 0.1])
 
     history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, FINE_TUNE_EPOCH, augment=True), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, FINE_TUNE_EPOCH, augment=False), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=FINE_TUNE_EPOCH, 
         callbacks=callbacks, 
@@ -222,5 +228,5 @@ if "fine_tune" in FLAGS:
         initial_epoch=EPOCHS
     )
 
-save_path = f'{MODEL_SAVE_PATH}/{date_name}/best.h5'
+save_path = f'{MODEL_SAVE_PATH}/{date_name}/final.h5'
 model.save(save_path)
