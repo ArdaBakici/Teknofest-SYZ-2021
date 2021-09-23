@@ -46,7 +46,7 @@ MODEL_WEIGHTS_PATH = None # if not none model will be contiune training with the
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
-LR = 0.00005
+LR = 0.0001
 EPOCHS = 50
 MODEL_SAVE_PATH = "./models"
 
@@ -54,7 +54,8 @@ MODEL_SAVE_PATH = "./models"
 train_dir = os.path.join(DATASET_PATH, TRAIN_DIR)
 val_dir = os.path.join(DATASET_PATH, VAL_DIR)
 
-date_name = datetime.now().strftime("%d_%m-%H_%M")
+specifier_name = 'tverky_dice_unet'
+date_name = f'{datetime.now().strftime("%d_%m-%H_%M")}-{specifier_name}'
 
 train_filenames = tf.io.gfile.glob(f"{train_dir}/*.tfrecords")
 val_filenames = tf.io.gfile.glob(f"{val_dir}/*.tfrecords")
@@ -67,7 +68,7 @@ os.makedirs(f'{MODEL_SAVE_PATH}/{date_name}', exist_ok=True)
 callbacks = [
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/best.h5', save_weights_only=False, save_best_only=True, mode='min'),
     keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/epoch_{{epoch:02d}}.h5', save_weights_only=False, save_freq=STEPS_PER_EPOCH*10, save_best_only=False, mode='min'),
-    keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
+    #keras.callbacks.ModelCheckpoint(f'{MODEL_SAVE_PATH}/{date_name}/weights_{{epoch:02d}}.h5', save_weights_only=True, save_freq=STEPS_PER_EPOCH*5, save_best_only=False, mode='min'),
     keras.callbacks.ReduceLROnPlateau(),
     keras.callbacks.CSVLogger(f'./customlogs/{date_name}.csv')
 ]
@@ -86,7 +87,6 @@ if "tensorboard" in FLAGS:
 def aug_fn(image, mask):
     transforms = A.Compose([
             A.Rotate(limit=40),
-            A.Flip(),
             ])
     aug_data = transforms(image=image, mask=mask)
     aug_img, aug_mask = aug_data["image"], aug_data["mask"]
@@ -111,6 +111,7 @@ def get_preprocessing(preprocessing_fn):
 def preprocessing_fn(image, mask):
     image = image/255.
     image = image.astype("float32")
+    mask = mask.astype("float32")
     return image, mask
 
 def parse_examples_batch(examples):
@@ -123,14 +124,14 @@ def parse_examples_batch(examples):
 
 def prepare_sample(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
-    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"])
     image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
 def prepare_sample_aug(features):
     image = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.uint8), features["image/raw_image"])
-    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float32), features["label/raw"]) # this was float64
-    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float32)), [image, label])
+    label = tf.vectorized_map(lambda x: tf.io.parse_tensor(x, out_type = tf.float64), features["label/raw"]) # this was float64
+    image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=aug_fn, inp=x, Tout=(tf.uint8, tf.float64)), [image, label])
     image, label = tf.vectorized_map(lambda x: tf.numpy_function(func=preprocessing_fn, inp=x, Tout=(tf.float32, tf.float32)), [image, label])
     return image, label
 
@@ -154,11 +155,10 @@ model = models.swin_unet_2d((512, 512, 3), filter_num_begin=32, n_labels=3, dept
 
 optim = keras.optimizers.Adam(LR)
 
-dice_loss = sm.losses.DiceLoss(class_weights=np.array([0.47, 0.47, 0.06])) 
-focal_tversky = losses.multiclass_focal_tversky()
+dice_loss = sm.losses.DiceLoss(class_weights=np.array([2, 2, 0.5])) 
 focal_loss = sm.losses.CategoricalFocalLoss()
 #total_loss = dice_loss + (1 * focal_tversky)
-total_loss = dice_loss
+total_loss = dice_loss + (1 * focal_loss)
 
 # actulally total_loss can be imported directly from library, above example just show you how to manipulate with losses
 # total_loss = sm.losses.binary_focal_dice_loss # or sm.losses.categorical_focal_dice_loss 
@@ -169,7 +169,7 @@ metrics = [sm.metrics.IOUScore(), sm.metrics.FScore()]
 model.compile(optim, total_loss, metrics)
 
 history = model.fit(
-        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=False), 
+        get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, augment=True), 
         steps_per_epoch=STEPS_PER_EPOCH, 
         epochs=EPOCHS, 
         callbacks=callbacks, 

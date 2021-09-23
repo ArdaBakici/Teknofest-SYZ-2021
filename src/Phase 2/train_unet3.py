@@ -210,7 +210,7 @@ else:
 
     # compile keras model with defined optimozer, loss and metrics
     #model.compile(optimizer= optim, loss=total_loss, metrics=metrics)
-    model.compile(optimizer= optim, loss=[keras_lovasz_softmax, focal_loss], metrics=metrics, loss_weights=[1, 1])
+    model.compile(optimizer= optim, loss=[[keras_lovasz_softmax, focal_loss], [keras_lovasz_softmax, focal_loss], [keras_lovasz_softmax, focal_loss], [keras_lovasz_softmax, focal_loss]], metrics=metrics, loss_weights=[[0.9, 0.1], [0.9, 0.1], [0.9, 0.1], [0.9, 0.1]])
 
 
 if(MODEL_WEIGHTS_PATH is not None):
