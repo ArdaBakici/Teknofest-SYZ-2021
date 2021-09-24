@@ -4,7 +4,7 @@ from tensorflow.python.keras import optimizers
 
 from tensorflow.python.keras.callbacks import EarlyStopping, ModelCheckpoint
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-FLAGS = ["tensorboard"] # tensorboard, mixed_precision, fine_tune
+FLAGS = [] # tensorboard, mixed_precision, fine_tune
 from tensorflow import keras
 import numpy as np
 import tensorflow as tf
@@ -43,18 +43,18 @@ SHUFFLE_SIZE = 256 # because dataset is too large huge shuffle sizes may cause p
 BATCH_SIZE = 2 # Highly dependent on d-gpu and system ram
 STEPS_PER_EPOCH = 6486//BATCH_SIZE # 4646 IMPORTANT this value should be equal to file_amount/batch_size because we can't find file_amount from tf.Dataset you should note it yourself
 VAL_STEPS_PER_EPOCH = 150//BATCH_SIZE # 995 same as steps per epoch
-MODEL_WEIGHTS_PATH = None#'./models/20_09-00_30-focal_lovasz_final/best_17.h5' #'./models/14_09-22_55/best.h5' # if not none model will be contiune training with these weights
+MODEL_WEIGHTS_PATH = './models/24_09-08_30-focal_lovasz_final/best.h5' #'./models/14_09-22_55/best.h5' # if not none model will be contiune training with these weights
 # every shard is 200 files with 36 files on last shard
 # Model Constants
 BACKBONE = 'efficientnetb3'
 # unlabelled 0, iskemik 1, hemorajik 2
 CLASSES = ['iskemik', 'kanama']
 LR = 0.0001
-EPOCHS = 20
+EPOCHS = 100
 FINE_TUNE_EPOCH = EPOCHS + 80
 MODEL_SAVE_PATH = "./models"
 
-specifier_name = 'focal_lovasz_pretrain_final'
+specifier_name = 'focal_lovasz_final'
 date_name = f'{datetime.now().strftime("%d_%m-%H_%M")}-{specifier_name}'
 
 # Variables
@@ -91,8 +91,8 @@ if "tensorboard" in FLAGS:
 
 def aug_fn(image, mask):
     transforms = A.Compose([
-            A.Rotate(limit=40),
-            A.Flip(),
+            A.Rotate(limit=20),
+            #A.Flip(),
             ])
     aug_data = transforms(image=image, mask=mask)
     aug_img, aug_mask = aug_data["image"], aug_data["mask"]
@@ -193,8 +193,7 @@ model.compile(optimizer= optim, loss=[keras_lovasz_softmax, focal_loss], metrics
 
 if(MODEL_WEIGHTS_PATH is not None):
     model = load_model(MODEL_WEIGHTS_PATH, custom_objects={'keras_lovasz_softmax': keras_lovasz_softmax, 'focal_loss': focal_loss, 'iou_score': sm.metrics.IOUScore(threshold=0.5), 'f1-score': sm.metrics.FScore(threshold=0.5)})
-    for layer in model.layers[:]:
-        layer.trainable = True
+    model.trainable = True
 
 history = model.fit(
         get_dataset_optimized(train_filenames, BATCH_SIZE, SHUFFLE_SIZE, EPOCHS, augment=False), 
@@ -202,7 +201,8 @@ history = model.fit(
         epochs=EPOCHS, 
         callbacks=callbacks, 
         validation_data=get_dataset_optimized(val_filenames, BATCH_SIZE, 0, EPOCHS, augment=False), 
-        validation_steps=VAL_STEPS_PER_EPOCH
+        validation_steps=VAL_STEPS_PER_EPOCH,
+        initial_epoch=27
     )
 
 if "fine_tune" in FLAGS:
