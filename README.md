@@ -1,3 +1,7 @@
+# Codes For Teknofest Artifical Intelligence In Health Competition
+
+## Uses EfficentNet, Unet and variations
+
 TeknofestSaglik
 
 Name the folder containing your dataset as "dataset". There is a special gitignore for that.
